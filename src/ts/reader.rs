@@ -11,11 +11,15 @@ pub trait ReadTsPacket {
     ///
     /// If the end of the stream is reached, it will return `Ok(None)`.
     fn read_ts_packet(&mut self) -> Result<Option<TsPacket>>;
+
+    /// Peeks at next packet without pulling the packet off the buffer.
+    fn peek_ts_packet(&mut self) -> Option<&TsPacket>;
 }
 
 /// TS packet reader.
 #[derive(Debug)]
 pub struct TsPacketReader<R> {
+    peeked_packet: Option<TsPacket>,
     stream: R,
     pids: HashMap<Pid, PidKind>,
 }
@@ -23,6 +27,7 @@ impl<R: Read> TsPacketReader<R> {
     /// Makes a new `TsPacketReader` instance.
     pub fn new(stream: R) -> Self {
         TsPacketReader {
+            peeked_packet: None,
             stream,
             pids: HashMap::new(),
         }
@@ -37,9 +42,8 @@ impl<R: Read> TsPacketReader<R> {
     pub fn into_stream(self) -> R {
         self.stream
     }
-}
-impl<R: Read> ReadTsPacket for TsPacketReader<R> {
-    fn read_ts_packet(&mut self) -> Result<Option<TsPacket>> {
+
+    fn read_next_packet(&mut self) -> Result<Option<TsPacket>> {
         let mut reader = self.stream.by_ref().take(TsPacket::SIZE as u64);
         let mut peek = [0; 1];
         let eos = track_io!(reader.read(&mut peek))? == 0;
@@ -79,31 +83,31 @@ impl<R: Read> ReadTsPacket for TsPacketReader<R> {
                         let null = track!(Null::read_from(&mut reader))?;
                         TsPayload::Null(null)
                     } else {
-                    let kind = track_assert_some!(
-                        self.pids.get(&header.pid).cloned(),
-                        ErrorKind::InvalidInput,
-                        "Unknown PID: header={:?}",
-                        header
-                    );
-                    match kind {
-                        PidKind::Pmt => {
-                            let pmt = track!(Pmt::read_from(&mut reader))?;
-                            for es in &pmt.table {
-                                self.pids.insert(es.elementary_pid, PidKind::Pes);
+                        let kind = track_assert_some!(
+                            self.pids.get(&header.pid).cloned(),
+                            ErrorKind::InvalidInput,
+                            "Unknown PID: header={:?}",
+                            header
+                        );
+                        match kind {
+                            PidKind::Pmt => {
+                                let pmt = track!(Pmt::read_from(&mut reader))?;
+                                for es in &pmt.table {
+                                    self.pids.insert(es.elementary_pid, PidKind::Pes);
+                                }
+                                TsPayload::Pmt(pmt)
                             }
-                            TsPayload::Pmt(pmt)
-                        }
-                        PidKind::Pes => {
-                            if payload_unit_start_indicator {
-                                let pes = track!(Pes::read_from(&mut reader))?;
-                                TsPayload::Pes(pes)
-                            } else {
-                                let bytes = track!(Bytes::read_from(&mut reader))?;
-                                TsPayload::Raw(bytes)
+                            PidKind::Pes => {
+                                if payload_unit_start_indicator {
+                                    let pes = track!(Pes::read_from(&mut reader))?;
+                                    TsPayload::Pes(pes)
+                                } else {
+                                    let bytes = track!(Bytes::read_from(&mut reader))?;
+                                    TsPayload::Raw(bytes)
+                                }
                             }
                         }
                     }
-                }
                 }
             };
             Some(payload)
@@ -117,6 +121,46 @@ impl<R: Read> ReadTsPacket for TsPacketReader<R> {
             adaptation_field,
             payload,
         }))
+    }
+
+    fn get_next_available_packet(&mut self) -> Option<TsPacket> {
+        let mut next_packet = None;
+
+        loop {
+            match self.read_next_packet() {
+                Ok(p) => {
+                    next_packet = p;
+                    break;
+                },
+                Err(e) => {
+                    println!("Dropped packet: {:?}", e);
+                }
+                
+            }
+        } 
+
+        next_packet
+    }
+}
+impl<R: Read> ReadTsPacket for TsPacketReader<R> {
+    fn peek_ts_packet(&mut self) -> Option<&TsPacket> {
+        if self.peeked_packet.is_none() {
+            let next_packet = self.get_next_available_packet();
+            self.peeked_packet = next_packet;
+        }
+   
+        self.peeked_packet.as_ref()
+    }
+
+    fn read_ts_packet(&mut self) -> Result<Option<TsPacket>> {
+        return if self.peeked_packet.is_some() {
+            let packet = self.peeked_packet.to_owned();
+            self.peeked_packet = None;
+            Ok(packet)
+        } else {
+            //TODO: This is currently a bit of a hack
+            Ok(self.get_next_available_packet())
+        };
     }
 }
 
