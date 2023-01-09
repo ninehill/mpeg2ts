@@ -69,12 +69,16 @@ impl<R: Read> ReadTsPacket for TsPacketReader<R> {
                     let null = track!(Null::read_from(&mut reader))?;
                     TsPayload::Null(null)
                 }
-                0x01...0x1F | 0x1FFB => {
+                0x01..=0x1F | 0x1FFB => {
                     // Unknown (unsupported) packets
                     let bytes = track!(Bytes::read_from(&mut reader))?;
                     TsPayload::Raw(bytes)
                 }
                 _ => {
+                    if !self.pids.contains_key(&header.pid) {
+                        let null = track!(Null::read_from(&mut reader))?;
+                        TsPayload::Null(null)
+                    } else {
                     let kind = track_assert_some!(
                         self.pids.get(&header.pid).cloned(),
                         ErrorKind::InvalidInput,
@@ -99,6 +103,7 @@ impl<R: Read> ReadTsPacket for TsPacketReader<R> {
                             }
                         }
                     }
+                }
                 }
             };
             Some(payload)

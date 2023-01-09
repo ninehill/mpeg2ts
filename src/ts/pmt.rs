@@ -61,10 +61,21 @@ impl Pmt {
             "Unexpected program info length unused bits"
         );
         let program_info_len = n & 0b0000_0011_1111_1111;
-        track_assert_eq!(program_info_len, 0, ErrorKind::Unsupported);
+
+        if  program_info_len > 0 {
+            for i in 0 .. program_info_len {
+                let _ = reader.read_u8();
+                //println!("{:02X?}", byte);
+            }
+        }
+
+        //track_assert_eq!(program_info_len, 0, ErrorKind::Unsupported);
 
         let mut table = Vec::new();
         while !reader.is_empty() {
+            /*if let Ok(es_info) = EsInfo::read_from(&mut reader) {
+                table.push(es_info);
+            }*/
             table.push(track!(EsInfo::read_from(&mut reader))?);
         }
         Ok(Pmt {

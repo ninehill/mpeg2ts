@@ -92,8 +92,14 @@ impl<R: ReadTsPacket> PesPacketReader<R> {
     }
 
     fn handle_raw_payload(&mut self, pid: Pid, data: &Bytes) -> Result<Option<PesPacket<Vec<u8>>>> {
-        let mut partial =
-            track_assert_some!(self.pes_packets.remove(&pid), ErrorKind::InvalidInput);
+        
+        let possible_partial =  self.pes_packets.remove(&pid);
+        if possible_partial.is_none() {
+            return Ok(None)
+        }
+
+        let mut partial = possible_partial.unwrap();
+
         partial.packet.data.extend_from_slice(data);
         if Some(partial.packet.data.len()) == partial.data_len {
             Ok(Some(partial.packet))

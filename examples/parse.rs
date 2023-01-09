@@ -14,8 +14,9 @@ fn main() {
         .arg(
             Arg::with_name("OUTPUT_TYPE")
                 .long("output-type")
+                .short("o")
                 .takes_value(true)
-                .possible_values(&["ts", "ts-packet", "pes-packet", "es-audio", "es-video"])
+                .possible_values(&["ts", "ts-packet", "pes-packet", "es-audio", "es-video", "klv"])
                 .default_value("ts-packet"),
         )
         .get_matches();
@@ -28,9 +29,17 @@ fn main() {
             }
         }
         "ts-packet" => {
+            let mut seen :Vec<u16> = Vec::new();
             let mut reader = TsPacketReader::new(std::io::stdin());
             while let Some(packet) = track_try_unwrap!(reader.read_ts_packet()) {
-                println!("{:?}", packet);
+                //println!("{:?}", packet);
+                
+                let pid = packet.header.pid.as_u16();
+                if !seen.contains(&pid) {
+                    seen.push(pid);
+                    println!("{:?}", pid);
+                }
+                
             }
         }
         "pes-packet" => {
@@ -63,6 +72,25 @@ fn main() {
                         .write_all(&packet.data)
                         .map_err(Failure::from_error)
                 );
+            }
+        }
+        "klv" => {
+            let mut reader = PesPacketReader::new(TsPacketReader::new(std::io::stdin()));
+            while let Some(packet) = track_try_unwrap!(reader.read_pes_packet()) {
+                // track_try_unwrap!(
+                //     std::io::stdout()
+                //         .write_all(&packet.data)
+                //         .map_err(Failure::from_error)
+                // );
+                if !packet.header.stream_id.is_klv() {
+                    continue;
+                } else {
+                    println!("{:0X?}",&packet.header.stream_id);
+                }
+                /*if packet.data.len() > 0 {
+                    println!("{:0X?}",&packet.data);
+                }*/
+                
             }
         }
         _ => unreachable!(),

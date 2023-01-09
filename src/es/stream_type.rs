@@ -4,6 +4,7 @@ use {ErrorKind, Result};
 #[allow(missing_docs)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum StreamType {
+    Other = 0x0,
     Mpeg1Video = 0x01,
     Mpeg2Video = 0x02,
     Mpeg1Audio = 0x03,
@@ -101,7 +102,8 @@ impl StreamType {
             0xD1 => StreamType::UltraHdVideo,
             0xDB => StreamType::H264WithAes128Cbc,
             0xEA => StreamType::MicrosoftWindowsMediaVideo9,
-            _ => track_panic!(ErrorKind::InvalidInput, "Unknown stream type: {}", n),
+            _ => StreamType::Other 
+            //_ => track_panic!(ErrorKind::InvalidInput, "Unknown stream type: {}", n),
         })
     }
 }

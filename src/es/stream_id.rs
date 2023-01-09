@@ -16,6 +16,13 @@ impl StreamId {
     /// Maximum value of the identifiers for video streams.
     pub const VIDEO_MAX: u8 = 0xEF;
 
+    //Synchronous KLV identifier
+    pub const KLV_SYNC: u8 = 0xBD;
+
+    //Synchronous KLV identifier
+    pub const KLV_ASYNC: u8 = 0xFC;
+
+
     /// Makes a new `StreamId` instance.
     pub fn new(id: u8) -> Self {
         StreamId(id)
@@ -64,5 +71,20 @@ impl StreamId {
     /// Returns `true` if it is a video identifier, otherwise `false`.
     pub fn is_video(&self) -> bool {
         0xE0 <= self.0 && self.0 <= 0xEF
+    }
+
+    /// Returns `true` if this contains a klv identifier, otherwise `false`.
+    pub fn is_klv(&self) -> bool {
+        return Self::is_async_klv(&self) || Self::is_sync_klv(&self)
+    }
+
+    //Returns true if this contains a synchronous klv identifier, otherwise `false`.
+    pub fn is_sync_klv(&self) -> bool {
+        self.0 == Self::KLV_SYNC
+    }
+
+    //Returns true if this contains an asynchronous klv identifier, otherwise `false`.
+    pub fn is_async_klv(&self) -> bool {
+        self.0 == Self::KLV_ASYNC
     }
 }
