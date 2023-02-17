@@ -104,7 +104,7 @@ impl<R: ReadTsPacket> PesPacketReader<R> {
             if pred.data_len.is_none() || pred.data_len == Some(pred.packet.data.len()) {
                 Ok(Some(pred.packet))
             } else {
-                println!(
+                log::trace!(
                     "Mismatched PES packet data length: actual={}, expected={}",
                     pred.data_len.expect("Never fails"),
                     pred.packet.data.len()
@@ -130,7 +130,7 @@ impl<R: ReadTsPacket> PesPacketReader<R> {
         } else {
             if let Some(expected) = partial.data_len {
                 if partial.packet.data.len() > expected {
-                    println!(
+                   log::trace!(
                         "Too large PES packet data: actual={}, expected={}",
                         partial.packet.data.len(),
                         expected

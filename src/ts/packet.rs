@@ -95,7 +95,7 @@ impl TsHeader {
     ) -> Result<(Self, AdaptationFieldControl, bool)> {
         let sync_byte = track_io!(reader.read_u8())?;
         if sync_byte != TsPacket::SYNC_BYTE {
-            println!("Packet header does not start with sync byte. Got 0x{:X}, expecting 0x{:X}", sync_byte, TsPacket::SYNC_BYTE);
+            log::trace!("Packet header does not start with sync byte. Got 0x{:X}, expecting 0x{:X}", sync_byte, TsPacket::SYNC_BYTE);
             return Err(crate::Error::from(ErrorKind::InvalidInput))
         }
 

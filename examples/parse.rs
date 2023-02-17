@@ -24,6 +24,7 @@ fn main() {
                     "es-video",
                     "klv",
                     "header",
+                    "timing",
                 ])
                 .default_value("ts-packet"),
         )
@@ -47,7 +48,6 @@ fn main() {
             let mut seen: Vec<u16> = Vec::new();
             let mut reader = TsPacketReader::new(std::io::stdin());
             while let Some(packet) = track_try_unwrap!(reader.read_ts_packet()) {
-                //println!("{:?}", packet);
                 let pid = packet.header.pid.as_u16();
                 if !seen.contains(&pid) {
                     seen.push(pid);
@@ -85,39 +85,33 @@ fn main() {
         }
         "klv" => {
             let mut reader = PesPacketReader::new(TsPacketReader::new(std::io::stdin()));
-            let mut seen: Vec<u16> = Vec::new();
             while let Some(packet) = track_try_unwrap!(reader.read_pes_packet()) {
-                // track_try_unwrap!(
-                //     std::io::stdout()
-                //         .write_all(&packet.data)
-                //         .map_err(Failure::from_error)
-                // );
-                if packet.header.stream_id.is_video() {
-                    println!("Video PTS: {:?}, Video DTS: {:?}", packet.header.pts, packet.header.dts);
-                } else if packet.header.stream_id.is_klv() {
-                    /*track_try_unwrap!(std::io::stdout()
-                    .write_all(&packet.data)
-                    .map_err(Failure::from_error));*/
-                    //println!("{:0X?}",&packet.header.stream_id);
-                    let pid = packet.header.stream_id.as_u8() as u16;
-                    if !seen.contains(&pid) {
-                        seen.push(pid);
-                        if packet.header.stream_id.is_async_klv() {
-                            println!("Async Packet 0x{:0X}", pid);
-                        } else {
-                            println!("Sync Packet 0x{:0X}", pid);
-                        }
-                    }
-
-                    if matches.is_present("VERBOSE") {
-                        println!("KLV PTS: {:?}, KLV DTS: {:?}", packet.header.pts, packet.header.dts);
-                        //println!("{:X?}", packet.data);
-                        println!();
-                    }
+                if packet.header.stream_id.is_klv() {
+                    track_try_unwrap!(std::io::stdout()
+                        .write_all(&packet.data)
+                        .map_err(Failure::from_error));
                 }
                 /*if packet.data.len() > 0 {
                     println!("{:0X?}",&packet.data);
                 }*/
+            }
+        }
+        "timing" => {
+            let mut reader = PesPacketReader::new(TsPacketReader::new(std::io::stdin()));
+            while let Some(packet) = track_try_unwrap!(reader.read_pes_packet()) {
+                if packet.header.stream_id.is_video() {
+                    println!(
+                        "Video PTS: {:?}, Video DTS: {:?}",
+                        packet.header.pts.map(|t| std::time::Duration::from_secs_f64(t.as_u64() as f64 / 90_000.0)), 
+                        packet.header.dts.map(|t| std::time::Duration::from_secs_f64(t.as_u64() as f64 / 90_000.0)), 
+                    );
+                } else if packet.header.stream_id.is_klv() {
+                    println!(
+                        "KLV PTS: {:?}, KLV DTS: {:?}",
+                        packet.header.pts.map(|t| std::time::Duration::from_secs_f64(t.as_u64() as f64 / 90_000.0)), 
+                         packet.header.dts.map(|t| std::time::Duration::from_secs_f64(t.as_u64() as f64 / 90_000.0)), 
+                    );
+                }
             }
         }
         "header" => {
@@ -127,7 +121,7 @@ fn main() {
                 let id = packet.header.stream_id.as_u8();
                 if !seen.contains(&id) {
                     seen.push(id);
-                    println!("0x{:0X?}",id);
+                    println!("0x{:0X?}", id);
                 }
             }
         }

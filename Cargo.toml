@@ -16,6 +16,7 @@ codecov = {repository = "sile/mpeg2ts"}
 [dependencies]
 byteorder = "1"
 trackable = "0.2"
+log = "0.4.17"
 
 [dev-dependencies]
 clap = "2"

@@ -133,7 +133,7 @@ impl<R: Read> TsPacketReader<R> {
                     break;
                 },
                 Err(e) => {
-                    println!("Dropped packet: {:?}", e);
+                    log::trace!("Dropped packet: {:?}", e);
                 }
                 
             }
