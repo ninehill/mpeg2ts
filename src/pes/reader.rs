@@ -4,9 +4,12 @@ use std::env;
 use pes::PesPacket;
 use ts::payload::{Bytes, Pes};
 use ts::{Pid, ReadTsPacket, TsPayload};
+
+use super::PartialPesPacket;
+
 use {ErrorKind, Result};
 
-const TS_IGNORE_HEADER_LENGTH : &str = "TS_IGNORE_HEADER_LENGTH";
+const TS_IGNORE_HEADER_LENGTH: &str = "TS_IGNORE_HEADER_LENGTH";
 
 /// The `ReadPesPacket` trait allows for reading PES packets from a source.
 pub trait ReadPesPacket {
@@ -41,7 +44,10 @@ pub struct PesPacketReader<R> {
 impl<R: ReadTsPacket> PesPacketReader<R> {
     /// Makes a new `PesPacketReader` instance.
     pub fn new(ts_packet_reader: R) -> Self {
-        let ignore_header_length = env::var(TS_IGNORE_HEADER_LENGTH.to_string()).unwrap_or("false".into()).to_lowercase() == "true";
+        let ignore_header_length = env::var(TS_IGNORE_HEADER_LENGTH.to_string())
+            .unwrap_or("false".into())
+            .to_lowercase()
+            == "true";
         PesPacketReader {
             peeked_packet: None,
             ts_packet_reader,
@@ -49,7 +55,7 @@ impl<R: ReadTsPacket> PesPacketReader<R> {
             eos: false,
             is_marked: false,
             back_buffer: VecDeque::<PesPacket<Vec<u8>>>::with_capacity(200),
-            ignore_packet_header_length: ignore_header_length
+            ignore_packet_header_length: ignore_header_length,
         }
     }
 
@@ -100,7 +106,7 @@ impl<R: ReadTsPacket> PesPacketReader<R> {
             data,
         };
         let partial = PartialPesPacket { packet, data_len };
-        
+
         if let Some(pred) = self.pes_packets.insert(pid, partial) {
             Ok(Some(pred.packet))
             // if pred.data_len.is_none() || pred.data_len == Some(pred.packet.data.len()) {
@@ -132,13 +138,13 @@ impl<R: ReadTsPacket> PesPacketReader<R> {
         } else {
             if let Some(expected) = partial.data_len {
                 if partial.packet.data.len() > expected {
-                   log::trace!(
+                    log::trace!(
                         "Too large PES packet data: actual={}, expected={}",
                         partial.packet.data.len(),
                         expected
                     );
-                    return Ok(None)
-                } 
+                    return Ok(None);
+                }
             }
             self.pes_packets.insert(pid, partial);
             Ok(None)
@@ -217,10 +223,4 @@ impl<R: ReadTsPacket> ReadPesPacket for PesPacketReader<R> {
     fn has_back_buffer(&self) -> bool {
         !self.back_buffer.is_empty()
     }
-}
-
-#[derive(Debug)]
-struct PartialPesPacket {
-    packet: PesPacket<Vec<u8>>,
-    data_len: Option<usize>,
 }
