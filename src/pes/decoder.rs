@@ -1,7 +1,4 @@
-use std::{
-    collections::{HashMap, VecDeque},
-    env,
-};
+use std::{collections::HashMap, env};
 
 use crate::ts::{
     payload::{Bytes, Pes},
@@ -17,12 +14,12 @@ const TS_IGNORE_HEADER_LENGTH: &str = "TS_IGNORE_HEADER_LENGTH";
 #[derive(Debug, Default)]
 pub struct PesPacketDecoder {
     pes_packets: HashMap<Pid, PartialPesPacket>,
-    back_buffer: VecDeque<PesPacket<Vec<u8>>>,
     ignore_packet_header_length: bool,
     eos: bool,
 }
 
 impl PesPacketDecoder {
+    /// Creates a new `PesPacketDecoder` instance.
     pub fn new() -> Self {
         let ignore_packet_header_length = env::var(TS_IGNORE_HEADER_LENGTH)
             .unwrap_or("false".into())
@@ -30,12 +27,12 @@ impl PesPacketDecoder {
             == "true";
         PesPacketDecoder {
             pes_packets: HashMap::new(),
-            back_buffer: VecDeque::<PesPacket<Vec<u8>>>::with_capacity(200),
             ignore_packet_header_length,
             eos: false,
         }
     }
 
+    /// Handles end-of-stream (EOS) condition by returning any partial data.
     fn handle_eos(&mut self) -> Result<Option<PesPacket<Vec<u8>>>> {
         if let Some(key) = self.pes_packets.keys().next().cloned() {
             let partial = self.pes_packets.remove(&key).expect("Never fails");
@@ -50,6 +47,7 @@ impl PesPacketDecoder {
         }
     }
 
+    /// Handles PES payload data.
     fn handle_pes_payload(&mut self, pid: Pid, pes: Pes) -> Result<Option<PesPacket<Vec<u8>>>> {
         let data_len = if self.ignore_packet_header_length || pes.pes_packet_len == 0 {
             None
@@ -74,17 +72,13 @@ impl PesPacketDecoder {
         };
         let partial = PartialPesPacket { packet, data_len };
         if let Some(pred) = self.pes_packets.insert(pid, partial) {
-            track_assert!(
-                pred.data_len.is_none() || pred.data_len == Some(pred.packet.data.len()),
-                ErrorKind::InvalidInput,
-                "Unexpected PES packet"
-            );
             Ok(Some(pred.packet))
         } else {
             Ok(None)
         }
     }
 
+    /// Handles raw payload data.
     fn handle_raw_payload(&mut self, pid: Pid, data: &Bytes) -> Result<Option<PesPacket<Vec<u8>>>> {
         let mut partial = match self.pes_packets.remove(&pid) {
             Some(partial) => partial,
@@ -110,10 +104,15 @@ impl PesPacketDecoder {
         }
     }
 
+    /// Processes a TS packet and returns a PES packet if available.
     pub fn process_ts_packet(
         &mut self,
         ts_packet: &TsPacket,
     ) -> Result<Option<PesPacket<Vec<u8>>>> {
+        if self.eos {
+            return track!(self.handle_eos());
+        }
+
         let pid = ts_packet.header.pid;
         let result = match &ts_packet.payload {
             Some(TsPayload::Pes(payload)) => track!(self.handle_pes_payload(pid, payload.clone()))?,
@@ -123,6 +122,7 @@ impl PesPacketDecoder {
         Ok(result)
     }
 
+    /// Flush the decoder.
     pub fn flush(&mut self) -> Result<Option<PesPacket<Vec<u8>>>> {
         if self.eos {
             return track!(self.handle_eos());
