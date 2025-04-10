@@ -132,3 +132,109 @@ impl PesPacketDecoder {
         track!(self.handle_eos())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        es::StreamId,
+        pes::PesHeader,
+        ts::{ContinuityCounter, TransportScramblingControl, TsHeader},
+    };
+
+    #[test]
+    fn test_pes_packet_decoder_raw_payload() {
+        let mut decoder = PesPacketDecoder::new();
+        let packet = TsPacket {
+            header: TsHeader {
+                transport_error_indicator: false,
+                transport_priority: false,
+                pid: Pid::new(0x100).unwrap(),
+                transport_scrambling_control: TransportScramblingControl::NotScrambled,
+                continuity_counter: ContinuityCounter::new(),
+            },
+            payload: Some(TsPayload::Raw(Bytes::new(&[0x00; 184]).unwrap())),
+            adaptation_field: None,
+        };
+        assert!(decoder.process_ts_packet(&packet).is_ok());
+    }
+
+    #[test]
+    fn test_pes_packet_decoder_pes_payload() {
+        let mut decoder = PesPacketDecoder::new();
+        let pes_packet = Pes {
+            header: PesHeader {
+                stream_id: StreamId::new(0x1),
+                priority: false,
+                data_alignment_indicator: false,
+                copyright: false,
+                original_or_copy: true,
+                pts: None,
+                dts: None,
+                escr: None,
+            },
+            pes_packet_len: 35,
+            data: Bytes::new(&[0x00; 32]).unwrap(),
+        };
+        let packet = TsPacket {
+            header: TsHeader {
+                transport_error_indicator: false,
+                transport_priority: false,
+                pid: Pid::new(0x100).unwrap(),
+                transport_scrambling_control: TransportScramblingControl::NotScrambled,
+                continuity_counter: ContinuityCounter::new(),
+            },
+            payload: Some(TsPayload::Pes(pes_packet)),
+            adaptation_field: None,
+        };
+
+        // first packet returned will be None
+        let result = decoder.process_ts_packet(&packet);
+        assert!(result.is_ok());
+        let pes_packet = result.unwrap();
+        assert!(pes_packet.is_none());
+
+        let result = decoder.process_ts_packet(&packet);
+        assert!(result.is_ok());
+        let pes_packet = result.unwrap();
+        assert!(pes_packet.is_some());
+    }
+
+    #[test]
+    fn test_pes_packet_decoder_flush() {
+        let mut decoder = PesPacketDecoder::new();
+        let pes_packet = Pes {
+            header: PesHeader {
+                stream_id: StreamId::new(0x1),
+                priority: false,
+                data_alignment_indicator: false,
+                copyright: false,
+                original_or_copy: true,
+                pts: None,
+                dts: None,
+                escr: None,
+            },
+            pes_packet_len: 35,
+            data: Bytes::new(&[0x00; 32]).unwrap(),
+        };
+        let packet = TsPacket {
+            header: TsHeader {
+                transport_error_indicator: false,
+                transport_priority: false,
+                pid: Pid::new(0x100).unwrap(),
+                transport_scrambling_control: TransportScramblingControl::NotScrambled,
+                continuity_counter: ContinuityCounter::new(),
+            },
+            payload: Some(TsPayload::Pes(pes_packet)),
+            adaptation_field: None,
+        };
+
+        let result = decoder.process_ts_packet(&packet);
+        assert!(result.is_ok());
+
+        let result = decoder.flush();
+        assert!(result.is_ok());
+        let p = result.unwrap();
+        assert!(p.is_some());
+    }
+}
