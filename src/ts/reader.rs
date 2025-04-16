@@ -131,13 +131,12 @@ impl<R: Read> TsPacketReader<R> {
                 Ok(p) => {
                     next_packet = p;
                     break;
-                },
+                }
                 Err(e) => {
                     log::trace!("Dropped packet: {:?}", e);
                 }
-                
             }
-        } 
+        }
 
         next_packet
     }
@@ -148,7 +147,7 @@ impl<R: Read> ReadTsPacket for TsPacketReader<R> {
             let next_packet = self.get_next_available_packet();
             self.peeked_packet = next_packet;
         }
-   
+
         self.peeked_packet.as_ref()
     }
 
